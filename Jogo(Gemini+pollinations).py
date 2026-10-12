@@ -1,13 +1,14 @@
 import customtkinter as ctk
 from google import genai
 import sys
+from Keys import *
 
 # 1. CONFIGURAÇÃO DO TEMA VISUAL
 ctk.set_appearance_mode("System")  # Adota o tema claro/escuro do teu Windows
 ctk.set_default_color_theme("blue")  # Define a cor dos botões e destaques
 
 # 2. CONEXÃO COM A IA E INSTRUÇÕES (Insere aqui a tua API Key do AI Studio)
-client = genai.Client(api_key="COLA_AQUI_A_TUA_CHAVE_DO_GOOGLE")
+client = genai.Client(api_key="YourkeyGemini")
 
 INSTRUCOES_DO_SISTEMA = """
 Tu és uma IA avançada que controla um quarto branco sem portas nem janelas.
@@ -28,6 +29,9 @@ CONTEXTO_INICIAL = (
     "AI: \"Gostarias de saber onde estás e o que é esta divisão?\""
 )
 
+# NOTA: Substitui por URLs reais de imagens (extensão .jpg/.png) se quiseres carregar da Web
+URL_IMAGEM_INICIAL = "https://raw.github.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
+
 class JanelaJogo(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -46,7 +50,7 @@ class JanelaJogo(ctk.CTk):
         # --- CRIAÇÃO DOS COMPONENTES DA INTERFACE ---
         
         # 1. Área de Texto onde a história aparece (Scrollable Text)
-        self.caixa_texto = ctk.CTkTextbox(self, width=660, height=450, font=("Courier New", 14), activate_scroll=True)
+        self.caixa_texto = ctk.CTkTextbox(self, width=660, height=450, font=("Courier New", 14))
         self.caixa_texto.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
         
         # Inserir o texto inicial do jogo na janela e bloquear para o utilizador não apagar
