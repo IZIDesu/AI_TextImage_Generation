@@ -106,45 +106,58 @@ class JanelaJogo(ctk.CTk):
 
     def processar_jogada(self, acao):
         try:
-            # 1. GERAR TEXTO DA HISTÓRIA
+            # 1. GERAR A NARRATIVA DO MESTRE
             resposta_ia = self.chat.send_message(acao)
             texto_completo = resposta_ia.text
             
-            # Separar a narrativa do prompt visual que pedimos nas instruções do sistema
             narrativa = texto_completo
-            prompt_geracao_imagem = "A futuristic clean white testing room, minimalist, cinematic lighting"
+            prompt_visual_ia = "A futuristic clean white testing room with a square glowing screen on the wall"
             
             if "PROMPT_VISUAL:" in texto_completo:
                 partes = texto_completo.split("PROMPT_VISUAL:")
                 narrativa = partes[0].strip()
-                prompt_geracao_imagem = partes[1].strip()
+                prompt_visual_ia = partes[1].strip()
 
-            # Mostrar a história no ecrã de texto
+            # Mostrar a história na consola de texto
             self.caixa_texto.configure(state="normal")
             self.caixa_texto.insert(ctk.END, f"[IA]: {narrativa}\n\n")
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # 2. GERAR IMAGEM DINÂMICA (IMAGEN 3) VIA API PREMIUM
-            # A IA lê o que aconteceu no quarto e cria uma imagem real na hora!
+            # 2. PROCESSO DE MODIFICAÇÃO DE IMAGEM (IMAGE-TO-IMAGE)
+            # Convertemos a imagem atual que o jogador está a ver em Bytes
+            img_bytes_io = io.BytesIO()
+            # self.imagem_atual_pil guarda o estado visual do quarto
+            self.imagem_atual_pil.save(img_bytes_io, format="PNG")
+            bytes_para_api = img_bytes_io.getvalue()
+
+            # Enviamos o prompt de texto + a imagem anterior para garantir a coerência visual
             resultado_imagem = client.models.generate_images(
                 model="imagen-3.0-generate-002",
-                prompt=prompt_geracao_imagem,
-                config={"number_of_images": 1, "aspect_ratio": "1:1"}
+                prompt=f"{prompt_visual_ia}, maintaining the exact same room structure, style and the glowing square screen from the source image",
+                config={
+                    "number_of_images": 1,
+                    "aspect_ratio": "1:1"
+                },
+                # Passamos a imagem base para a IA modificar em vez de criar do zero
+                image=bytes_para_api 
             )
             
-            # Extrair os bytes da imagem gerada na Cloud e atualizar a parede esquerda
-            bytes_imagem = resultado_imagem.generated_images[0].image.image_bytes
-            img_data = Image.open(io.BytesIO(bytes_imagem))
-            img_ctk = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(400, 430))
+            # 3. ATUALIZAR A INTERFACE COM A NOVA REALIDADE
+            bytes_imagem_nova = resultado_imagem.generated_images.image.image_bytes
+            self.imagem_atual_pil = Image.open(io.BytesIO(bytes_imagem_nova))
+            
+            # Redimensiona para mostrar na janela do jogo
+            img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
-            self.caixa_texto.insert(ctk.END, f"[Erro do Sistema]: {e}\n\n")
+            self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
             self.caixa_texto.configure(state="disabled")
 
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
+
 
 if __name__ == "__main__":
     app = JanelaJogo()
