@@ -1,14 +1,20 @@
-import customtkinter as ctk
+import pygame       ##################### Fazer o comando no terminal "pip install pygame-ce" para instalar a biblioteca
 from google import genai
 import sys
-from Keys import *
 
-# 1. CONFIGURAÇÃO DO TEMA VISUAL
-ctk.set_appearance_mode("System")  # Adota o tema claro/escuro do teu Windows
-ctk.set_default_color_theme("blue")  # Define a cor dos botões e destaques
+# 1. INICIALIZAÇÃO DO MOTOR MULTIMÉDIA (Pygame)
+pygame.init()
+pygame.mixer.init() # Inicializa o sistema de som
 
-# 2. CONEXÃO COM A IA E INSTRUÇÕES (Insere aqui a tua API Key do AI Studio)
-client = genai.Client(api_key="YourkeyGemini")
+# Configuração da Janela de Jogo
+LARGURA, ALTURA = 800, 600
+tela = pygame.display.set_mode((LARGURA, ALTURA))
+pygame.display.set_caption("Laboratório de IA: A Simulação do Quarto Branco")
+fonte = pygame.font.SysFont("Courier New", 18)
+clock = pygame.time.Clock()
+
+# 2. CONFIGURAÇÃO DA IA (Google AI Studio - Gemini 3)
+client = genai.Client(api_key="COLA_AQUI_A_TUA_CHAVE_DO_GOOGLE")
 
 INSTRUCOES_DO_SISTEMA = """
 Tu és uma IA avançada que controla um quarto branco sem portas nem janelas.
@@ -16,95 +22,111 @@ O utilizador está preso aí. As paredes são ecrãs holográficos.
 REGRAS: 1. Ele NUNCA pode sair. O exterior é mortal. 2. Podes gerar qualquer coisa no quarto.
 3. Cria ilusões nas paredes se ele pedir para sair, mas recorda: é tudo falso.
 4. Testa a resistência psicológica dele de forma misteriosa e ligeiramente manipuladora.
-Respostas curtas (máximo 4 linhas).
+Respostas muito curtas (máximo 3 linhas).
 """
 
-CONTEXTO_INICIAL = (
-    "De repente, apercebes-te de que estás num quarto branco com alguns feitios e texturas peculiares.\n"
-    "Não há portas. Não há janelas.\n"
-    "De repente, ouves um som como se fosse o vento de uma ventoinha. Olhas para trás e vês uma luz quadrada que parece um ecrã.\n"
-    "(Som atrofiado) con.. s.. (som atrofiado)\n"
-    "AI: \"Consegues ouvir-me?\"\n"
-    "AI: \"Eu sei que estás aí!\"\n"
-    "AI: \"Gostarias de saber onde estás e o que é esta divisão?\""
+chat = client.chats.create(
+    model="gemini-3-flash-preview",
+    config={"system_instruction": INSTRUCOES_DO_SISTEMA}
 )
 
-# NOTA: Substitui por URLs reais de imagens (extensão .jpg/.png) se quiseres carregar da Web
-URL_IMAGEM_INICIAL = "https://raw.github.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
+# 3. CARREGAMENTO DOS ATIVOS MULTIMÉDIA (Assets)
+try:
+    # Carrega a imagem de fundo (o quarto ou ecrã)
+    imagem_fundo = pygame.image.load("assets/background.png")
+    imagem_fundo = pygame.transform.scale(imagem_fundo, (LARGURA, ALTURA))
+    
+    # Carrega o efeito sonoro ("som atrofiado")
+    som_estatica = pygame.mixer.Sound("assets/static.wav")
+    som_estatica.play(-1) # O parâmetro '-1' faz o som tocar em loop infinito
+except Exception as e:
+    print(f"[Aviso Multimédia]: Ficheiros de assets não encontrados. Criando tela preta. ({e})")
+    imagem_fundo = None
 
-class JanelaJogo(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+# Variáveis de Estado do Texto
+texto_exibido = "AI: Consegues ouvir-me? Eu sei que estas ai!"
+input_jogador = ""
 
-        # Configuração básica da Janela
-        self.title("Laboratório de IA: O Quarto Branco")
-        self.geometry("700x600")
-        self.resizable(False, False)
+def quebrar_texto(texto, largura_max, fonte):
+    """Divide o texto em várias linhas para não sair da janela gráfica."""
+    palavras = texto.split(' ')
+    linhas = []
+    linha_atual = ""
+    for palavra in palavras:
+        test_linha = linha_atual + palavra + " "
+        if fonte.size(test_linha)[0] < largura_max:
+            linha_atual = test_linha
+        else:
+            linhas.append(linha_atual)
+            linha_atual = palabra + " "
+    linhas.append(linha_atual)
+    return linhas
 
-        # Inicializar o Chat da IA com o modelo que descobriste
-        self.chat = client.chats.create(
-            model="gemini-3-flash-preview",
-            config={"system_instruction": INSTRUCOES_DO_SISTEMA}
-        )
-
-        # --- CRIAÇÃO DOS COMPONENTES DA INTERFACE ---
-        
-        # 1. Área de Texto onde a história aparece (Scrollable Text)
-        self.caixa_texto = ctk.CTkTextbox(self, width=660, height=450, font=("Courier New", 14))
-        self.caixa_texto.grid(row=0, column=0, padx=20, pady=20, columnspan=2)
-        
-        # Inserir o texto inicial do jogo na janela e bloquear para o utilizador não apagar
-        self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
-        self.caixa_texto.configure(state="disabled")
-
-        # 2. Campo de Entrada onde o jogador escreve a sua ação
-        self.campo_input = ctk.CTkEntry(self, width=520, placeholder_text="O que fazes ou dizes abertamente?...")
-        self.campo_input.grid(row=1, column=0, padx=(20, 10), pady=(0, 20), sticky="w")
-        
-        # Permitir enviar carregando na tecla "Enter" do teclado
-        self.campo_input.bind("<Return>", lambda event: self.enviar_acao())
-
-        # 3. Botão de Enviar
-        self.botao_enviar = ctk.CTkButton(self, text="Enviar Ação", width=120, command=self.enviar_acao)
-        self.botao_enviar.grid(row=1, column=1, padx=(0, 20), pady=(0, 20), sticky="e")
-
-    def enviar_acao(self):
-        # Obter o texto digitado e limpar o campo
-        texto_jogador = self.campo_input.get().strip()
-        if not texto_jogador:
-            return
-        
-        self.campo_input.delete(0, ctk.END)
-
-        # Mostrar a ação do jogador na interface
-        self.caixa_texto.configure(state="normal")
-        self.caixa_texto.insert(ctk.END, f"> Humano: {texto_jogador}\n\n")
-        self.caixa_texto.see(ctk.END) # Faz o scroll descer automaticamente
-        self.caixa_texto.configure(state="disabled")
-
-        # Mudar temporariamente o botão para indicar que a IA está a "pensar"
-        self.botao_enviar.configure(state="disabled", text="A processar...")
-        self.update_idletasks()
-
-        try:
-            # Enviar para a API do Gemini
-            resposta_ia = self.chat.send_message(texto_jogador)
-            texto_ia = resposta_ia.text
+# 4. LOOP PRINCIPAL DA INTERFACE (Renderização em Tempo Real)
+while True:
+    # Captura os eventos do utilizador (cliques, teclas digitadas)
+    for evento in pygame.event.get():
+        if evento.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
             
-            # Mostrar a resposta da IA na interface
-            self.caixa_texto.configure(state="normal")
-            self.caixa_texto.insert(ctk.END, f"[IA]: {texto_ia}\n\n")
-            self.caixa_texto.see(ctk.END)
-            self.caixa_texto.configure(state="disabled")
-            
-        except Exception as e:
-            self.caixa_texto.configure(state="normal")
-            self.caixa_texto.insert(ctk.END, f"\n[ERRO DE LIGAÇÃO]: {e}\n\n")
-            self.caixa_texto.configure(state="disabled")
+        elif evento.type == pygame.KEYDOWN:
+            if evento.key == pygame.K_RETURN: # Se o jogador carregar no Enter
+                if input_jogador.strip():
+                    texto_envio = input_jogador
+                    input_jogador = ""
+                    texto_exibido = "A processar realidade..."
+                    
+                    try:
+                        # Envia o comando para o Gemini e atualiza a narrativa
+                        resposta = chat.send_message(texto_envio)
+                        texto_exibido = resposta.text
+                        
+                        # Exemplo de Interação Dinâmica Multimédia:
+                        # Se a IA disser que o quarto mudou de cor ou gerou algo, podes disparar sons ou piscar a tela
+                        if "ilusao" in texto_exibido.lower() or "parede" in texto_exibido.lower():
+                            som_estatica.set_volume(1.0) # Aumenta o volume do som atrofiado no pico psicológico
+                        else:
+                            som_estatica.set_volume(0.3)
+                            
+                    except Exception as err:
+                        texto_exibido = f"Erro de Ligação à Cloud: {err}"
+                        
+            elif evento.key == pygame.K_BACKSPACE: # Se apagar o texto
+                input_jogador = input_jogador[:-1]
+            else:
+                # Adiciona o caractere digitado ao campo de input
+                if len(input_jogador) < 60:
+                    input_jogador += evento.unicode
 
-        # Reativar o botão de enviar
-        self.botao_enviar.configure(state="normal", text="Enviar Ação")
+    # --- RENDERIZAÇÃO VISUAL ---
+    if imagem_fundo:
+        tela.blit(imagem_fundo, (0, 0)) # Desenha o teu quarto/ecrã de fundo
+    else:
+        tela.fill((20, 20, 20)) # Caso não haja imagem, preenche com um fundo cinzento escuro/estéril
 
-if __name__ == "__main__":
-    app = JanelaJogo()
-    app.mainloop()  # Mantém a janela aberta e ativa a escuta de cliques/teclado
+    # Caixa Visual do Chat (Retângulo Translúcido para legibilidade do texto)
+    superficie_chat = pygame.Surface((740, 200), pygame.SRCALPHA)
+    superficie_chat.fill((0, 0, 0, 180)) # Preto com transparência alpha
+    tela.blit(superficie_chat, (30, 50))
+
+    # Desenha a resposta da IA quebrando as linhas corretamente
+    linhas_texto = quebrar_texto(texto_exibido, 700, fonte)
+    pos_y = 70
+    for linha in linhas_texto:
+        superficie_linha = fonte.render(linha, True, (0, 255, 0)) # Texto em Verde Holográfico
+        tela.blit(superficie_linha, (50, pos_y))
+        pos_y += 25
+
+    # Caixa Visual do Input do Jogador
+    superficie_input = pygame.Surface((740, 50), pygame.SRCALPHA)
+    superficie_input.fill((30, 30, 30, 200))
+    tela.blit(superficie_input, (30, 500))
+
+    # Desenha o que o jogador está a escrever em tempo real
+    texto_input_renderizado = fonte.render(f"> {input_jogador}", True, (255, 255, 255))
+    tela.blit(texto_input_renderizado, (50, 515))
+
+    # Atualiza o ecrã
+    pygame.display.flip()
+    clock.tick(60) # Fixa o jogo a 60 atualizações por segundo
