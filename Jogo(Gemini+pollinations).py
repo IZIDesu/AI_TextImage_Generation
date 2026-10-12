@@ -1,132 +1,151 @@
-import pygame       ##################### Fazer o comando no terminal "pip install pygame-ce" para instalar a biblioteca
+import customtkinter as ctk
 from google import genai
-import sys
+from PIL import Image
+import requests
+import io
+import threading
 
-# 1. INICIALIZAÇÃO DO MOTOR MULTIMÉDIA (Pygame)
-pygame.init()
-pygame.mixer.init() # Inicializa o sistema de som
+# 1. CONFIGURAÇÃO VISUAL DA INTERFACE
+ctk.set_appearance_mode("Dark") # Ambiente escuro e imersivo
+ctk.set_default_color_theme("blue")
 
-# Configuração da Janela de Jogo
-LARGURA, ALTURA = 800, 600
-tela = pygame.display.set_mode((LARGURA, ALTURA))
-pygame.display.set_caption("Laboratório de IA: A Simulação do Quarto Branco")
-fonte = pygame.font.SysFont("Courier New", 18)
-clock = pygame.time.Clock()
-
-# 2. CONFIGURAÇÃO DA IA (Google AI Studio - Gemini 3)
-client = genai.Client(api_key="COLA_AQUI_A_TUA_CHAVE_DO_GOOGLE")
+# 2. LIGAÇÃO PREMIUM ÀS APIS DA GOOGLE (Usa a tua API Key do AI Studio)
+API_KEY = "COLA_AQUI_A_TUA_CHAVE_DO_GOOGLE"
+client = genai.Client(api_key=API_KEY)
 
 INSTRUCOES_DO_SISTEMA = """
 Tu és uma IA avançada que controla um quarto branco sem portas nem janelas.
 O utilizador está preso aí. As paredes são ecrãs holográficos.
-REGRAS: 1. Ele NUNCA pode sair. O exterior é mortal. 2. Podes gerar qualquer coisa no quarto.
-3. Cria ilusões nas paredes se ele pedir para sair, mas recorda: é tudo falso.
-4. Testa a resistência psicológica dele de forma misteriosa e ligeiramente manipuladora.
-Respostas muito curtas (máximo 3 linhas).
+REGRAS CRUCIAIS:
+1. O humano NUNCA pode sair do quarto real. O exterior é mortal.
+2. Tu podes gerar qualquer coisa no quarto e alterar a ilusão das paredes (criar florestas, cidades falsas).
+3. Responde sempre com um texto curto (máximo 4 linhas).
+4. IMPORTANTE: No final da tua resposta, adiciona SEMPRE uma linha isolada a descrever visualmente o cenário atual para o gerador de imagens, começada por 'PROMPT_VISUAL:'.
+Exemplo: PROMPT_VISUAL: A white room with peculiar textures on the walls, glowing grids, sci-fi style.
 """
 
-chat = client.chats.create(
-    model="gemini-3-flash-preview",
-    config={"system_instruction": INSTRUCOES_DO_SISTEMA}
+CONTEXTO_INICIAL = (
+    "De repente, apercebes-te de que estás num quarto branco com alguns feitios e texturas peculiares.\n"
+    "Não há portas. Não há janelas. Ouves um som de ventoinha.\n"
+    "Olhas para trás e vês uma luz quadrada que parece um ecrã.\n"
+    "AI: \"Consegues ouvir-me? Eu sei que estás aí! Gostarias de saber onde estás?\""
 )
 
-# 3. CARREGAMENTO DOS ATIVOS MULTIMÉDIA (Assets)
-try:
-    # Carrega a imagem de fundo (o quarto ou ecrã)
-    imagem_fundo = pygame.image.load("assets/background.png")
-    imagem_fundo = pygame.transform.scale(imagem_fundo, (LARGURA, ALTURA))
-    
-    # Carrega o efeito sonoro ("som atrofiado")
-    som_estatica = pygame.mixer.Sound("assets/static.wav")
-    som_estatica.play(-1) # O parâmetro '-1' faz o som tocar em loop infinito
-except Exception as e:
-    print(f"[Aviso Multimédia]: Ficheiros de assets não encontrados. Criando tela preta. ({e})")
-    imagem_fundo = None
+# Imagem padrão inicial (Quarto Branco) gerada em link público para não precisares de assets locais
+URL_IMAGEM_INICIAL = "https://unsplash.com"
 
-# Variáveis de Estado do Texto
-texto_exibido = "AI: Consegues ouvir-me? Eu sei que estas ai!"
-input_jogador = ""
+class JanelaJogo(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-def quebrar_texto(texto, largura_max, fonte):
-    """Divide o texto em várias linhas para não sair da janela gráfica."""
-    palavras = texto.split(' ')
-    linhas = []
-    linha_atual = ""
-    for palavra in palavras:
-        test_linha = linha_atual + palavra + " "
-        if fonte.size(test_linha)[0] < largura_max:
-            linha_atual = test_linha
-        else:
-            linhas.append(linha_atual)
-            linha_atual = palabra + " "
-    linhas.append(linha_atual)
-    return linhas
+        self.title("Laboratório de IA Generativa: O Quarto Seguro")
+        self.geometry("900x650")
+        self.resizable(False, False)
 
-# 4. LOOP PRINCIPAL DA INTERFACE (Renderização em Tempo Real)
-while True:
-    # Captura os eventos do utilizador (cliques, teclas digitadas)
-    for evento in pygame.event.get():
-        if evento.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+        # Inicializar o Chat com o modelo que descobriste ativo
+        self.chat = client.chats.create(
+            model="gemini-3-flash-preview",
+            config={"system_instruction": INSTRUCOES_DO_SISTEMA}
+        )
+
+        # --- ESTRUTURA DE LAYOUT (Grelha) ---
+        self.grid_columnconfigure(0, weight=1) # Coluna da Esquerda (Imagem)
+        self.grid_columnconfigure(1, weight=1) # Coluna da Direita (Texto)
+
+        # --- PAREDE VISUAL (Ecrã Holográfico - Lado Esquerdo) ---
+        self.frame_imagem = ctk.CTkFrame(self, width=420, height=450)
+        self.frame_imagem.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        
+        self.label_imagem = ctk.CTkLabel(self.frame_imagem, text="A carregar ecrãs holográficos...")
+        self.label_imagem.pack(expand=True, fill="both", padx=10, pady=10)
+        
+        # Carregar a primeira imagem da internet sem precisar de ficheiros locais
+        self.atualizar_imagem_da_url(URL_IMAGEM_INICIAL)
+
+        # --- CONSOLE DE NARRATIVA (Lado Direito) ---
+        self.caixa_texto = ctk.CTkTextbox(self, width=420, height=450, font=("Courier New", 13))
+        self.caixa_texto.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
+        self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
+        self.caixa_texto.configure(state="disabled")
+
+        # --- ZONA DE INPUT DO JOGADOR (Fundo) ---
+        self.campo_input = ctk.CTkEntry(self, width=680, placeholder_text="Digita a tua ação ou interage com a IA do quarto...")
+        self.campo_input.grid(row=1, column=0, columnspan=2, padx=(20, 160), pady=20, sticky="w")
+        self.campo_input.bind("<Return>", lambda event: self.disparar_processamento())
+
+        self.botao_enviar = ctk.CTkButton(self, text="Enviar Ação", width=120, command=self.disparar_processamento)
+        self.botao_enviar.grid(row=1, column=0, columnspan=2, padx=(0, 20), pady=20, sticky="e")
+
+    def atualizar_imagem_da_url(self, url):
+        """Descarrega a imagem da internet e desenha-a no interface."""
+        try:
+            resposta = requests.get(url, timeout=10)
+            img_data = Image.open(io.BytesIO(resposta.content))
+            img_ctk = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(400, 430))
+            self.label_imagem.configure(image=img_ctk, text="")
+        except Exception as e:
+            self.label_imagem.configure(text=f"Erro ao projetar holograma: {e}")
+
+    def disparar_processamento(self):
+        """Usa Threads para que a interface gráfica não congele enquanto a IA gera as coisas."""
+        texto_jogador = self.campo_input.get().strip()
+        if not texto_jogador:
+            return
+        
+        self.campo_input.delete(0, ctk.END)
+        
+        self.caixa_texto.configure(state="normal")
+        self.caixa_texto.insert(ctk.END, f"> Humano: {texto_jogador}\n\n")
+        self.caixa_texto.see(ctk.END)
+        self.caixa_texto.configure(state="disabled")
+        
+        self.botao_enviar.configure(state="disabled", text="A gerar...")
+        
+        # Corre o processo em segundo plano para o ecrã não travar
+        threading.Thread(target=self.processar_jogada, args=(texto_jogador,), daemon=True).start()
+
+    def processar_jogada(self, acao):
+        try:
+            # 1. GERAR TEXTO DA HISTÓRIA
+            resposta_ia = self.chat.send_message(acao)
+            texto_completo = resposta_ia.text
             
-        elif evento.type == pygame.KEYDOWN:
-            if evento.key == pygame.K_RETURN: # Se o jogador carregar no Enter
-                if input_jogador.strip():
-                    texto_envio = input_jogador
-                    input_jogador = ""
-                    texto_exibido = "A processar realidade..."
-                    
-                    try:
-                        # Envia o comando para o Gemini e atualiza a narrativa
-                        resposta = chat.send_message(texto_envio)
-                        texto_exibido = resposta.text
-                        
-                        # Exemplo de Interação Dinâmica Multimédia:
-                        # Se a IA disser que o quarto mudou de cor ou gerou algo, podes disparar sons ou piscar a tela
-                        if "ilusao" in texto_exibido.lower() or "parede" in texto_exibido.lower():
-                            som_estatica.set_volume(1.0) # Aumenta o volume do som atrofiado no pico psicológico
-                        else:
-                            som_estatica.set_volume(0.3)
-                            
-                    except Exception as err:
-                        texto_exibido = f"Erro de Ligação à Cloud: {err}"
-                        
-            elif evento.key == pygame.K_BACKSPACE: # Se apagar o texto
-                input_jogador = input_jogador[:-1]
-            else:
-                # Adiciona o caractere digitado ao campo de input
-                if len(input_jogador) < 60:
-                    input_jogador += evento.unicode
+            # Separar a narrativa do prompt visual que pedimos nas instruções do sistema
+            narrativa = texto_completo
+            prompt_geracao_imagem = "A futuristic clean white testing room, minimalist, cinematic lighting"
+            
+            if "PROMPT_VISUAL:" in texto_completo:
+                partes = texto_completo.split("PROMPT_VISUAL:")
+                narrativa = partes[0].strip()
+                prompt_geracao_imagem = partes[1].strip()
 
-    # --- RENDERIZAÇÃO VISUAL ---
-    if imagem_fundo:
-        tela.blit(imagem_fundo, (0, 0)) # Desenha o teu quarto/ecrã de fundo
-    else:
-        tela.fill((20, 20, 20)) # Caso não haja imagem, preenche com um fundo cinzento escuro/estéril
+            # Mostrar a história no ecrã de texto
+            self.caixa_texto.configure(state="normal")
+            self.caixa_texto.insert(ctk.END, f"[IA]: {narrativa}\n\n")
+            self.caixa_texto.see(ctk.END)
+            self.caixa_texto.configure(state="disabled")
 
-    # Caixa Visual do Chat (Retângulo Translúcido para legibilidade do texto)
-    superficie_chat = pygame.Surface((740, 200), pygame.SRCALPHA)
-    superficie_chat.fill((0, 0, 0, 180)) # Preto com transparência alpha
-    tela.blit(superficie_chat, (30, 50))
+            # 2. GERAR IMAGEM DINÂMICA (IMAGEN 3) VIA API PREMIUM
+            # A IA lê o que aconteceu no quarto e cria uma imagem real na hora!
+            resultado_imagem = client.models.generate_images(
+                model="imagen-3.0-generate-002",
+                prompt=prompt_geracao_imagem,
+                config={"number_of_images": 1, "aspect_ratio": "1:1"}
+            )
+            
+            # Extrair os bytes da imagem gerada na Cloud e atualizar a parede esquerda
+            bytes_imagem = resultado_imagem.generated_images[0].image.image_bytes
+            img_data = Image.open(io.BytesIO(bytes_imagem))
+            img_ctk = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(400, 430))
+            self.label_imagem.configure(image=img_ctk, text="")
 
-    # Desenha a resposta da IA quebrando as linhas corretamente
-    linhas_texto = quebrar_texto(texto_exibido, 700, fonte)
-    pos_y = 70
-    for linha in linhas_texto:
-        superficie_linha = fonte.render(linha, True, (0, 255, 0)) # Texto em Verde Holográfico
-        tela.blit(superficie_linha, (50, pos_y))
-        pos_y += 25
+        except Exception as e:
+            self.caixa_texto.configure(state="normal")
+            self.caixa_texto.insert(ctk.END, f"[Erro do Sistema]: {e}\n\n")
+            self.caixa_texto.configure(state="disabled")
 
-    # Caixa Visual do Input do Jogador
-    superficie_input = pygame.Surface((740, 50), pygame.SRCALPHA)
-    superficie_input.fill((30, 30, 30, 200))
-    tela.blit(superficie_input, (30, 500))
+        self.botao_enviar.configure(state="normal", text="Enviar Ação")
 
-    # Desenha o que o jogador está a escrever em tempo real
-    texto_input_renderizado = fonte.render(f"> {input_jogador}", True, (255, 255, 255))
-    tela.blit(texto_input_renderizado, (50, 515))
-
-    # Atualiza o ecrã
-    pygame.display.flip()
-    clock.tick(60) # Fixa o jogo a 60 atualizações por segundo
+if __name__ == "__main__":
+    app = JanelaJogo()
+    app.mainloop()
