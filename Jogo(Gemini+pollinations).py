@@ -32,7 +32,7 @@ CONTEXTO_INICIAL = (
 )
 
 # Imagem padrão inicial (Quarto Branco) gerada em link público para não precisares de assets locais
-URL_IMAGEM_INICIAL = "https://unsplash.com"
+URL_IMAGEM_INICIAL = "https://raw.github.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
 
 class JanelaJogo(ctk.CTk):
     def __init__(self):
