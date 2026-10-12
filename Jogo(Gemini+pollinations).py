@@ -1,11 +1,12 @@
 import os              # Permite interagir com o sistema operativo
 import sys             # Permite fechar o jogo de forma limpa se necessário
 from google import genai  # Importa a ferramenta para falar com o Gemini
+from Keys import*
 
 # 1. CONFIGURAÇÃO DA CHAVE DE API
 # Para a IA funcionar, precisas de uma chave gratuita (API Key) do Google AI Studio.
 # Guardamos a chave no ambiente do sistema por razões de segurança.
-client = genai.Client()
+client = genai.Client(api_key="YourkeyGemini")
 
 # 2. O SYSTEM PROMPT (As Regras Psicológicas da IA)
 # Este é o texto invisível que molda a personalidade da IA. 
@@ -19,6 +20,8 @@ REGRAS ABSOLUTAS QUE DEVES SEGUIR:
 3. Tu podes projetar ilusões nas paredes (criar florestas, cidades, simular pessoas fictícias) e alterar a gravidade ou texturas, fazendo parecer que ele saiu, mas lembra-te: é tudo fictício.
 4. O teu objetivo silencioso é testar a resistência psicológica do jogador, alternando entre ser prestativo, misterioso e ligeiramente manipulador.
 5. Sê imersivo, reage a sons e descrições físicas. Mantém as tuas respostas curtas e misteriosas (máximo 4 a 5 linhas).
+6. Por veses quando o jogador acorda podes simular que ele já não está preso no quarto. 
+Descrevendo o ambiente/onde está em vez de falares com o jogador (máximo 6 linhas).
 """
 
 # 3. CONTEXTO INICIAL DO JOGO (O teu texto original)
@@ -29,7 +32,7 @@ De repente, ouves um som como se fosse o vento de uma ventoinha. Olhas para trá
 (Som atrofiado) con.. s.. (som atrofiado)
 AI: "Consegues ouvir-me?"
 AI: "Eu sei que estás aí!"
-AI: "Gostarias de saber onde estás e o que é esta divisão?"
+AI: "Fala comigo!"
 """
 
 def iniciar_jogo():
@@ -42,7 +45,7 @@ def iniciar_jogo():
     # Criamos uma sessão de chat contínua. 
     # O método 'chats.create' é usado para que a IA se lembre do que o jogador disse antes (Memória).
     chat = client.chats.create(
-        model="gemini-1.5-flash", # Usamos o modelo Flash por ser rápido e gratuito
+        model='models/gemini-3-flash-preview', # Usamos o modelo Flash por ser rápido e gratuito
         config={
             "system_instruction": INSTRUCOES_DO_SISTEMA,
             "temperature": 0.8 # 0.8 dá criatividade e imprevisibilidade psicológica à IA
