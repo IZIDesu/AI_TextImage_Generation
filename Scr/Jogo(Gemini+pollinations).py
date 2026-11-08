@@ -6,9 +6,9 @@ import requests
 import io
 import threading
 import random  # Necessário para criar um Seed estável no início do jogo
-from Keys import*
+from Keys import *
 
-# AI Text Model - CORRIGIDO para o identificador oficial de produção estável
+# AI Text Model - Identificador oficial ativo no teu AI Studio
 ai_model = "gemini-3-flash-preview"
 
 # 1. CONFIGURAÇÃO VISUAL DA INTERFACE
@@ -16,7 +16,7 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 # 2. LIGAÇÃO ÀS APIS DA GOOGLE (Apenas para o chat de texto)
-API_KEY = YourkeyGemini
+API_KEY = YourkeyGemini  # Corrigido para ler a tua variável importada do ficheiro Keys
 client = genai.Client(api_key=API_KEY)
 
 INSTRUCOES_DO_SISTEMA = """
@@ -134,7 +134,7 @@ class JanelaJogo(ctk.CTk):
                 texto_completo = "PROMPT_VISUAL: " + acao
             
             narrativa = texto_completo
-            prompt_visual_ia = "A minimalistic white testing room, sci-fi style"
+            prompt_visual_ia = "" #"A minimalistic white testing room, sci-fi style"
             
             # Extração segura dos elementos da lista após o split
             if "PROMPT_VISUAL:" in texto_completo:
@@ -149,33 +149,53 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
-            prompt_visual_ia = prompt_visual_ia.replace(".", "").replace(",", "").strip()
-            prompt_final = f"{prompt_visual_ia} ultra detailed volumetric lighting"
-            prompt_codificado = urllib.parse.quote(prompt_final)
+            # --- 🛑 NOVO FILTRO DE PALAVRAS-CHAVE ---
+            # Definimos os gatilhos que dão ordem para alterar a imagem do quarto
+            palavras_gatilho = ["gera", "projeta", "cria", "muda", "simula", "coloca", "materializa", "transforma", "bola", "roblox"]
             
-            # CORREÇÃO DA URL: Forçar 1024x1024 nativo garante que o servidor processa sem Erro 500
-            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
-            print(f"url_ia_gratis: {url_ia_gratis}")
+            # Converte a ação do jogador para minúsculas para uma verificação segura
+            acao_minuscula = acao.lower()
             
-            cabecalhos = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
-            resposta_imagem.raise_for_status()
-            
-            # 3. ATUALIZAR A INTERFACE RECORTANDO A MARGEM EXTRA PROPORCIONALMENTE
-            imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
-            
-            # Corta os píxeis excedentes da base de forma segura na escala 1024 (1024x940)
-            caixa_de_corte = (0, 0, 512, 512)
-            self.imagem_atual_pil = imagem_bruta.crop(caixa_de_corte)
-            
-            img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
-            self.label_imagem.configure(image=img_ctk, text="")
-            self.label_imagem.image = img_ctk
+            # O Python verifica se ALGUMA das palavras gatilho está presente na frase do utilizador
+            deve_alterar_imagem = any(gatilho in acao_minuscula for gatilho in palavras_gatilho)
+
+            if deve_alterar_imagem:
+                # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
+                prompt_visual_ia = prompt_visual_ia.replace(".", "").replace(",", "").strip()
+                prompt_final = f"A professional cinematic scene of {prompt_visual_ia} ultra detailed volumetric lighting"
+                prompt_codificado = urllib.parse.quote(prompt_final)
+                
+                # Resolução padrão estável de 512x512 para o Pollinations rodar sem erro 500 ou 402
+                url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
+                print(f"url_ia_gratis: {url_ia_gratis}")
+                
+                cabecalhos = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
+                resposta_imagem.raise_for_status()
+                
+                # 3. ATUALIZAR A INTERFACE COM A NOVA IMAGEM GERADA
+                self.imagem_atual_pil = Image.open(io.BytesIO(resposta_imagem.content))
+                
+                img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
+                self.label_imagem.configure(image=img_ctk, text="")
+                self.label_imagem.image = img_ctk
+  
+                # 3. ATUALIZAR A INTERFACE RECORTANDO A MARGEM EXTRA PROPORCIONALMENTE
+                imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
+
+                # Corta os píxeis excedentes da base de forma segura na escala 1024 (1024x940)
+                caixa_de_corte = (0, 0, 512, 512)
+                self.imagem_atual_pil = imagem_bruta.crop(caixa_de_corte)
+
+                img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
+                self.label_imagem.configure(image=img_ctk, text="")
+                self.label_imagem.image = img_ctk
+                
+            else:
+                print("[Sistema Visual]: Nenhuma palavra-chave detetada. A manter o cenário atual.")
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
-            self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
             print(f"[Erro Visual IA]: {e}\n")
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
