@@ -5,6 +5,7 @@ from PIL import Image
 import requests
 import io
 import threading
+import random  # NOVO: Necessário para criar um Seed estável no início do jogo
 from Keys import*
 
 # 1. CONFIGURAÇÃO VISUAL DA INTERFACE
@@ -45,6 +46,10 @@ class JanelaJogo(ctk.CTk):
 
         # Inicializar a variável que vai guardar o estado da imagem em memória
         self.imagem_atual_pil = None
+        
+        # MODIFICAÇÃO CRUCIAL: Gerar um número de Seed único para esta partida (entre 1 e 100000)
+        # Isto fixa a "geometria" e o estilo do quarto para as gerações seguintes não mudarem de cenário.
+        self.seed_partida = random.randint(1, 100000)
 
         # Inicializar o Chat com o modelo ativo
         self.chat = client.chats.create(
@@ -137,12 +142,13 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
 
             # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
-            prompt_final = f"{prompt_visual_ia}, maintaining the exact same room structure, style and the glowing square screen from a front view perspective, sci-fi style, ultra detailed"
+            # Reforçamos no prompt o estilo "front view" e passamos o seed dinamicamente na URL
+            prompt_final = f"Front view of a minimalist white sci-fi room, sleek design, square glowing screen on the wall, {prompt_visual_ia}, ultra detailed, volumetric lighting"
             prompt_codificado = urllib.parse.quote(prompt_final)
             
-            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true"
-            #               f"https://pollinations.ai{prompt_codificado}?width=512&height=512&nologo=true"
-            
+            # CORREÇÃO CRUCIAL: Passamos &seed={self.seed_partida} para bloquear o layout do cenário
+            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true&seed={self.seed_partida}"
+            #               f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true"
             # Descarregar a imagem gerada
             resposta_imagem = requests.get(url_ia_gratis, timeout=20)
             resposta_imagem.raise_for_status()
@@ -150,7 +156,6 @@ class JanelaJogo(ctk.CTk):
             # 3. ATUALIZAR A INTERFACE
             self.imagem_atual_pil = Image.open(io.BytesIO(resposta_imagem.content))
             
-            # CORREÇÃO EXTRA: text="" limpa qualquer string anterior para evitar o bug de label do CTk
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
             self.label_imagem.image = img_ctk
