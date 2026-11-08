@@ -4,13 +4,14 @@ from PIL import Image
 import requests
 import io
 import threading
+from Keys import*
 
 # 1. CONFIGURAÇÃO VISUAL DA INTERFACE
-ctk.set_appearance_mode("Dark") # Ambiente escuro e imersivo
+ctk.set_appearance_mode("Dark") 
 ctk.set_default_color_theme("blue")
 
-# 2. LIGAÇÃO PREMIUM ÀS APIS DA GOOGLE (Usa a tua API Key do AI Studio)
-API_KEY = "COLA_AQUI_A_TUA_CHAVE_DO_GOOGLE"
+# 2. LIGAÇÃO ÀS APIS DA GOOGLE
+API_KEY = "keyGemini"
 client = genai.Client(api_key=API_KEY)
 
 INSTRUCOES_DO_SISTEMA = """
@@ -31,8 +32,8 @@ CONTEXTO_INICIAL = (
     "AI: \"Consegues ouvir-me? Eu sei que estás aí! Gostarias de saber onde estás?\""
 )
 
-# Imagem padrão inicial (Quarto Branco) gerada em link público para não precisares de assets locais
-URL_IMAGEM_INICIAL = "https://raw.github.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
+# NOTA: Substitui por URLs reais de imagens (extensão .jpg/.png) se quiseres carregar da Web
+URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
 
 class JanelaJogo(ctk.CTk):
     def __init__(self):
@@ -42,52 +43,58 @@ class JanelaJogo(ctk.CTk):
         self.geometry("900x650")
         self.resizable(False, False)
 
-        # Inicializar o Chat com o modelo que descobriste ativo
+        # Inicializar a variável que vai guardar o estado da imagem em memória
+        self.imagem_atual_pil = None
+
+        # Inicializar o Chat com o modelo ativo
         self.chat = client.chats.create(
             model="gemini-3-flash-preview",
             config={"system_instruction": INSTRUCOES_DO_SISTEMA}
         )
 
         # --- ESTRUTURA DE LAYOUT (Grelha) ---
-        self.grid_columnconfigure(0, weight=1) # Coluna da Esquerda (Imagem)
-        self.grid_columnconfigure(1, weight=1) # Coluna da Direita (Texto)
+        self.grid_columnconfigure(0, weight=1) 
+        self.grid_columnconfigure(1, weight=1) 
 
-        # --- PAREDE VISUAL (Ecrã Holográfico - Lado Esquerdo) ---
+        # --- PAREDE VISUAL ---
         self.frame_imagem = ctk.CTkFrame(self, width=420, height=450)
         self.frame_imagem.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
         
         self.label_imagem = ctk.CTkLabel(self.frame_imagem, text="A carregar ecrãs holográficos...")
         self.label_imagem.pack(expand=True, fill="both", padx=10, pady=10)
         
-        # Carregar a primeira imagem da internet sem precisar de ficheiros locais
+        # Carregar imagem inicial de segurança
         self.atualizar_imagem_da_url(URL_IMAGEM_INICIAL)
 
-        # --- CONSOLE DE NARRATIVA (Lado Direito) ---
+        # --- CONSOLE DE NARRATIVA ---
         self.caixa_texto = ctk.CTkTextbox(self, width=420, height=450, font=("Courier New", 13))
         self.caixa_texto.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
         self.caixa_texto.configure(state="disabled")
 
-        # --- ZONA DE INPUT DO JOGADOR (Fundo) ---
-        self.campo_input = ctk.CTkEntry(self, width=680, placeholder_text="Digita a tua ação ou interage com a IA do quarto...")
+        # --- ZONA DE INPUT DO JOGADOR ---
+        self.campo_input = ctk.CTkEntry(self, width=680, placeholder_text="Digita a tua ação...")
         self.campo_input.grid(row=1, column=0, columnspan=2, padx=(20, 160), pady=20, sticky="w")
         self.campo_input.bind("<Return>", lambda event: self.disparar_processamento())
 
         self.botao_enviar = ctk.CTkButton(self, text="Enviar Ação", width=120, command=self.disparar_processamento)
         self.botao_enviar.grid(row=1, column=0, columnspan=2, padx=(0, 20), pady=20, sticky="e")
-
+    
     def atualizar_imagem_da_url(self, url):
-        """Descarrega a imagem da internet e desenha-a no interface."""
+        """Descarrega a imagem da internet e guarda-a no estado do objeto."""
         try:
             resposta = requests.get(url, timeout=10)
-            img_data = Image.open(io.BytesIO(resposta.content))
-            img_ctk = ctk.CTkImage(light_image=img_data, dark_image=img_data, size=(400, 430))
+            self.imagem_atual_pil = Image.open(io.BytesIO(resposta.content))
+            
+            img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
         except Exception as e:
-            self.label_imagem.configure(text=f"Erro ao projetar holograma: {e}")
+            # Imagem de fallback caso a internet falhe (Cria um quadrado cinzento temporário)
+            self.imagem_atual_pil = Image.new("RGB", (400, 430), color="gray")
+            img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
+            self.label_imagem.configure(image=img_ctk, text=f"Modo de segurança ativo: {e}")
 
     def disparar_processamento(self):
-        """Usa Threads para que a interface gráfica não congele enquanto a IA gera as coisas."""
         texto_jogador = self.campo_input.get().strip()
         if not texto_jogador:
             return
@@ -101,7 +108,6 @@ class JanelaJogo(ctk.CTk):
         
         self.botao_enviar.configure(state="disabled", text="A gerar...")
         
-        # Corre o processo em segundo plano para o ecrã não travar
         threading.Thread(target=self.processar_jogada, args=(texto_jogador,), daemon=True).start()
 
     def processar_jogada(self, acao):
@@ -124,40 +130,39 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # 2. PROCESSO DE MODIFICAÇÃO DE IMAGEM (IMAGE-TO-IMAGE)
-            # Convertemos a imagem atual que o jogador está a ver em Bytes
+            # 2. PROCESSO DE MODIFICAÇÃO DE IMAGEM
             img_bytes_io = io.BytesIO()
-            # self.imagem_atual_pil guarda o estado visual do quarto
             self.imagem_atual_pil.save(img_bytes_io, format="PNG")
             bytes_para_api = img_bytes_io.getvalue()
 
-            # Enviamos o prompt de texto + a imagem anterior para garantir a coerência visual
+            # Gerar nova imagem combinando o prompt
             resultado_imagem = client.models.generate_images(
                 model="imagen-3.0-generate-002",
                 prompt=f"{prompt_visual_ia}, maintaining the exact same room structure, style and the glowing square screen from the source image",
                 config={
                     "number_of_images": 1,
                     "aspect_ratio": "1:1"
-                },
-                # Passamos a imagem base para a IA modificar em vez de criar do zero
-                image=bytes_para_api 
+                }
+                # Se a API Imagen falhar com a imagem base nos testes, podes comentar a linha abaixo
+                # e usar puramente geração por texto (Text-to-Image)
+                # image=bytes_para_api 
             )
             
-            # 3. ATUALIZAR A INTERFACE COM A NOVA REALIDADE
+            # 3. ATUALIZAR A INTERFACE
+            # CORREÇÃO: Aceder ao primeiro índice [0] da lista retornada
             bytes_imagem_nova = resultado_imagem.generated_images.image.image_bytes
             self.imagem_atual_pil = Image.open(io.BytesIO(bytes_imagem_nova))
             
-            # Redimensiona para mostrar na janela do jogo
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
             self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
+            self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
-
 
 if __name__ == "__main__":
     app = JanelaJogo()
