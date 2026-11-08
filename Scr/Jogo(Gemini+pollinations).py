@@ -88,7 +88,8 @@ class JanelaJogo(ctk.CTk):
         # --- CONSOLE DE NARRATIVA ---
         self.caixa_texto = ctk.CTkTextbox(self, width=550, height=450, font=("Courier New", 13))
         self.caixa_texto.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
+        #self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
+        self.after(0, lambda: self.exibir_texto_efeito_maquina(CONTEXTO_INICIAL))
         self.caixa_texto.configure(state="disabled")
 
 
@@ -152,7 +153,7 @@ class JanelaJogo(ctk.CTk):
         
         threading.Thread(target=self.processar_jogada, args=(texto_jogador,), daemon=True).start()
 
-    def exibir_texto_efeito_maquina(self, texto_completo, indice=0):
+    def exibir_texto_efeito_maquina(self, texto_completo, indice=0, delay=30):
         #"""Adiciona o texto caractere por caractere para criar o efeito de máquina de escrever."""
         if indice < len(texto_completo):
             self.caixa_texto.configure(state="normal")
@@ -161,7 +162,7 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
             
             # Agenda a inserção do próximo caractere (30 milissegundos de intervalo)
-            self.after(30, lambda: self.exibir_texto_efeito_maquina(texto_completo, indice + 1))
+            self.after(delay, lambda: self.exibir_texto_efeito_maquina(texto_completo, indice + 1))
         else:
             # Reativa o botão de envio apenas quando a máquina de escrever terminar de digitar tudo
             self.botao_enviar.configure(state="normal", text="Enviar Ação")
