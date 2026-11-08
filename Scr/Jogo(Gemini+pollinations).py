@@ -152,10 +152,17 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # --- 🧠 SISTEMA INTELIGENTE DE COMPARAÇÃO DE CENÁRIO ---
-            # Comparamos se a descrição visual que o Gemini ditou agora é diferente da anterior.
-            # Se for diferente, significa que a cena mudou ou um objeto foi alterado/adicionado!
-            deve_alterar_imagem = prompt_visual_ia.lower() != self.ultimo_prompt_visual.lower()
+            # --- 🧠 FILTRO HÍBRIDO (Gatilhos + Comparação de Cenário) ---
+            # 1. Palavras que indicam que o utilizador quer uma alteração visual
+            palavras_gatilho = ["gera", "projeta", "cria", "muda", "simula", "coloca", "materializa", "transforma", "bola", "roblox", "quadrado", "cubo", "floresta", "cidade"]
+            acao_minuscula = acao.lower()
+            contem_gatilho = any(gatilho in acao_minuscula for gatilho in palavras_gatilho)
+            
+            # 2. Verifica se o prompt gerado pela IA realmente mudou face ao anterior
+            prompt_mudou = prompt_visual_ia.lower() != self.ultimo_prompt_visual.lower()
+
+            # Só altera a imagem se o jogador usou um gatilho CONTEXTUAL OU se a IA alterou drasticamente o cenário
+            deve_alterar_imagem = contem_gatilho and prompt_mudou
 
             if deve_alterar_imagem:
                 # Atualizamos o estado da memória para a próxima jogada comparar com esta
@@ -166,8 +173,7 @@ class JanelaJogo(ctk.CTk):
                 prompt_final = f"A professional cinematic scene of {prompt_visual_ia} ultra detailed volumetric lighting"
                 prompt_codificado = urllib.parse.quote(prompt_final)
                 
-                # Aproveitei para fixar o teu link de download com a resolução padrão nativa de 512x512
-                # (Isto remove o teu bug anterior de "512x540" que causava o Erro 500/402 no terminal)
+                # Trancado em 512x512 estável para evitar erros de rede
                 url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
                 print(f"url_ia_gratis: {url_ia_gratis}")
                 
@@ -175,11 +181,8 @@ class JanelaJogo(ctk.CTk):
                 resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
                 resposta_imagem.raise_for_status()
                 
-                # 3. ATUALIZAR A INTERFACE RECORTANDO A MARGEM EXTRA PROPORCIONALMENTE
+                # 3. ATUALIZAR A INTERFACE
                 imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
-
-                # Caixa de corte: Se usares 512x512 nativo, não precisas de crop de segurança.
-                # Mas se quiseres fatiar, mantive a estrutura do crop estruturada aqui.
                 self.imagem_atual_pil = imagem_bruta
 
                 # Corta os píxeis excedentes da base de forma segura na escala 1024 (1024x940)
@@ -191,7 +194,7 @@ class JanelaJogo(ctk.CTk):
                 self.label_imagem.image = img_ctk
                 
             else:
-                print("[Sistema Visual]: O cenário mantem-se idêntico ao anterior. Nenhuma imagem descarregada.")
+                print("[Sistema Visual]: Diálogo normal detetado ou cenário repetido. Mantendo a imagem atual.")
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
@@ -200,6 +203,7 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
 
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
+
 
 if __name__ == "__main__":
     app = JanelaJogo()
