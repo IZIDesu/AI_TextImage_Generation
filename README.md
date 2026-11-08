@@ -31,8 +31,7 @@ Este projeto demonstra a integração prática e híbrida de modelos de linguage
 
 ### 1. Clonar o Repositório
 ```bash
-git clone https://github.com
-cd NOME_DO_REPOSITORIO
+git clone https://github.com/IZIDesu/AI_TextImage_Generation.git
 ```
 
 ### 2. Instalar as Dependências
