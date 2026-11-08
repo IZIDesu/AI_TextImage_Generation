@@ -5,11 +5,19 @@ from PIL import Image
 import requests
 import io
 import threading
-import random  # NOVO: Necessário para criar um Seed estável no início do jogo
+import random  # Necessário para criar um Seed estável no início do jogo
 from Keys import*
 
+# AI Text Model - Atualizado para 2.5 para evitar esgotamento de quota do preview
+ai_model = "Gemini-2"
+#"gemini-3.1-pro-preview"
+#"Gemini-3.7-Flash"
+#"Gemini-3.1-Flash-Lite"
+#"Antigravity"
+#"gemini-3-flash-preview"
+
 # 1. CONFIGURAÇÃO VISUAL DA INTERFACE
-ctk.set_appearance_mode("Dark") 
+ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 # 2. LIGAÇÃO ÀS APIS DA GOOGLE (Apenas para o chat de texto)
@@ -23,15 +31,18 @@ REGRAS CRUCIAIS:
 1. O humano NUNCA pode sair do quarto real. O exterior é mortal.
 2. Tu podes gerar qualquer coisa no quarto e alterar a ilusão das paredes (criar florestas, cidades falsas).
 3. Responde sempre com um texto curto (máximo 4 linhas).
-4. IMPORTANTE: No final da tua resposta, adiciona SEMPRE uma linha isolada a descrever visualmente o cenário atual para o gerador de imagens, começada por 'PROMPT_VISUAL:'.
-Exemplo: PROMPT_VISUAL: A white room with peculiar textures on the walls, glowing grids, sci-fi style.
+4. IMPORTANTE: No final da tua resposta, adiciona SEMPRE uma linha isolada a descrever visualmente o cenário atual detalhadamente para o gerador de imagens, começada por 'PROMPT_VISUAL:'.
+Exemplo se alterares o quarto para uma floresta: PROMPT_VISUAL: A dense and realistic tropical rainforest, sunlight filtering through leaves, highly immersive illusion.
+Exemplo se apenas materializares um objeto: PROMPT_VISUAL: A minimalist white testing room with a smooth basketball resting on the floor, sci-fi style.
 """
 
 CONTEXTO_INICIAL = (
     "De repente, apercebes-te de que estás num quarto branco com alguns feitios e texturas peculiares.\n"
     "Não há portas. Não há janelas. Ouves um som de ventoinha.\n"
     "Olhas para trás e vês uma luz quadrada que parece um ecrã.\n"
-    "AI: \"Consegues ouvir-me? Eu sei que estás aí! Gostarias de saber onde estás?\""
+    "AI: Consegues ouvir-me?\n" 
+    "AI: Eu sei que estás aí!\n" 
+    "AI: Gostarias de saber onde estás?\n"
 )
 
 URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
@@ -47,13 +58,12 @@ class JanelaJogo(ctk.CTk):
         # Inicializar a variável que vai guardar o estado da imagem em memória
         self.imagem_atual_pil = None
         
-        # MODIFICAÇÃO CRUCIAL: Gerar um número de Seed único para esta partida (entre 1 e 100000)
-        # Isto fixa a "geometria" e o estilo do quarto para as gerações seguintes não mudarem de cenário.
+        # Gerar um número de Seed único para esta partida (entre 1 e 100000)
         self.seed_partida = random.randint(1, 100000)
 
         # Inicializar o Chat com o modelo ativo
         self.chat = client.chats.create(
-            model="gemini-3-flash-preview",
+            model=ai_model,
             config={"system_instruction": INSTRUCOES_DO_SISTEMA}
         )
 
@@ -68,7 +78,7 @@ class JanelaJogo(ctk.CTk):
         self.label_imagem = ctk.CTkLabel(self.frame_imagem, text="A carregar ecrãs holográficos...")
         self.label_imagem.pack(expand=True, fill="both", padx=10, pady=10)
         
-        # Carregar imagem inicial de segurança
+        # Carregar imagem inicial de segurança do teu GitHub (Sem intervenção de prompts)
         self.atualizar_imagem_da_url(URL_IMAGEM_INICIAL)
 
         # --- CONSOLE DE NARRATIVA ---
@@ -94,7 +104,6 @@ class JanelaJogo(ctk.CTk):
             
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
-            # Mantém a referência da imagem viva na memória do componente
             self.label_imagem.image = img_ctk
             
         except Exception as e:
@@ -121,14 +130,20 @@ class JanelaJogo(ctk.CTk):
 
     def processar_jogada(self, acao):
         try:
-            # 1. GERAR A NARRATIVA DO MESTRE
-            resposta_ia = self.chat.send_message(acao)
-            texto_completo = resposta_ia.text
+            try:
+                # 1. GERAR A NARRATIVA DO MESTRE
+                resposta_ia = self.chat.send_message(acao)
+                texto_completo = resposta_ia.text
+
+            except Exception as e:
+                print(f"[Erro Visual IA]: {e}\n")
+                texto_completo = "PROMPT_VISUAL:" + acao
             
-            narrativa = texto_completo
-            prompt_visual_ia = "A futuristic clean white testing room with a square glowing screen on the wall"
+            narrativa = texto_completo #← Texto da acção do Humano
+            prompt_visual_ia = ""
+            #"A futuristic clean white testing room with a square glowing screen on the wall"
             
-            # CORREÇÃO: Extração segura dos elementos da lista após o split
+            # CORREÇÃO CRUCIAL: Aceder aos índices corretos [0] e [1] da lista pós-split
             if "PROMPT_VISUAL:" in texto_completo:
                 partes = texto_completo.split("PROMPT_VISUAL:")
                 if len(partes) >= 2:
@@ -142,19 +157,25 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
 
             # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
-            # Reforçamos no prompt o estilo "front view" e passamos o seed dinamicamente na URL
-            prompt_final = f"Front view of a minimalist white sci-fi room, sleek design, square glowing screen on the wall, {prompt_visual_ia}, ultra detailed, volumetric lighting"
+            # Limpeza cirúrgica do prompt para evitar que caracteres estranhos quebrem o servidor da IA
+            prompt_visual_ia = prompt_visual_ia.replace(".", "").replace(",", "").strip()
+            prompt_final = f"{prompt_visual_ia} ultra detailed volumetric lighting"
+            #"{prompt_visual_ia} sci-fi style ultra detailed volumetric lighting"
             prompt_codificado = urllib.parse.quote(prompt_final)
-            
-            # CORREÇÃO CRUCIAL: Passamos &seed={self.seed_partida} para bloquear o layout do cenário
-            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true&seed={self.seed_partida}"
-            #               f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true"
+            #print(f"Prompt enviado para imagem: {prompt_final}")
+            #print(f"prompt_codificado: {prompt_codificado}")
+            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
+            print(f"url_ia_gratis: {url_ia_gratis}")
             # Descarregar a imagem gerada
-            resposta_imagem = requests.get(url_ia_gratis, timeout=20)
+            cabecalhos = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
             resposta_imagem.raise_for_status()
             
-            # 3. ATUALIZAR A INTERFACE
-            self.imagem_atual_pil = Image.open(io.BytesIO(resposta_imagem.content))
+            # 3. ATUALIZAR A INTERFACE RECORTANDO OS 50 PIXEIS EXTRA
+            imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
+            
+            caixa_de_corte = (0, 0, 512, 512)
+            self.imagem_atual_pil = imagem_bruta.crop(caixa_de_corte)
             
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
@@ -163,10 +184,34 @@ class JanelaJogo(ctk.CTk):
         except Exception as e:
             self.caixa_texto.configure(state="normal")
             self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
+            print(f"[Erro Visual IA]: {e}\n")
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
+        #self.processar_imagem(acao)
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
+
+    #def processar_imagem(self, acao):
+    #    try:
+    #        # 1. GERAR A NARRATIVA DO MESTRE
+    #        resposta_ia = self.chat.send_message(acao)
+    #        texto_completo = resposta_ia.text
+    #        
+    #        #narrativa = texto_completo #← Texto da acção do Humano
+    #        prompt_visual_ia = ""
+    #        # CORREÇÃO CRUCIAL: Aceder aos índices corretos [0] e [1] da lista pós-split
+    #        if "PROMPT_VISUAL:" in texto_completo:
+    #            partes = texto_completo.split("PROMPT_VISUAL:")
+    #            if len(partes) >= 2:
+    #                #narrativa = partes[0].strip()
+    #                prompt_visual_ia = partes[1].strip()
+    #        
+    #    except Exception as e:
+    #        self.caixa_texto.configure(state="normal")
+    #        self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
+    #        self.caixa_texto.see(ctk.END)
+    #        self.caixa_texto.configure(state="disabled")
+
 
 
 if __name__ == "__main__":
