@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from google import genai
+import urllib.parse  # Importação correta para codificar texto para a URL da IA
 from PIL import Image
 import requests
 import io
@@ -10,8 +11,8 @@ from Keys import*
 ctk.set_appearance_mode("Dark") 
 ctk.set_default_color_theme("blue")
 
-# 2. LIGAÇÃO ÀS APIS DA GOOGLE
-API_KEY = "keyGemini"
+# 2. LIGAÇÃO ÀS APIS DA GOOGLE (Apenas para o chat de texto)
+API_KEY = YourkeyGemini
 client = genai.Client(api_key=API_KEY)
 
 INSTRUCOES_DO_SISTEMA = """
@@ -32,7 +33,6 @@ CONTEXTO_INICIAL = (
     "AI: \"Consegues ouvir-me? Eu sei que estás aí! Gostarias de saber onde estás?\""
 )
 
-# NOTA: Substitui por URLs reais de imagens (extensão .jpg/.png) se quiseres carregar da Web
 URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
 
 class JanelaJogo(ctk.CTk):
@@ -84,15 +84,19 @@ class JanelaJogo(ctk.CTk):
         """Descarrega a imagem da internet e guarda-a no estado do objeto."""
         try:
             resposta = requests.get(url, timeout=10)
+            resposta.raise_for_status()
             self.imagem_atual_pil = Image.open(io.BytesIO(resposta.content))
             
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
+            # Mantém a referência da imagem viva na memória do componente
+            self.label_imagem.image = img_ctk
+            
         except Exception as e:
-            # Imagem de fallback caso a internet falhe (Cria um quadrado cinzento temporário)
-            self.imagem_atual_pil = Image.new("RGB", (400, 430), color="gray")
+            self.imagem_atual_pil = Image.new("RGB", (400, 430), color="#1e1e24")
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text=f"Modo de segurança ativo: {e}")
+            self.label_imagem.image = img_ctk
 
     def disparar_processamento(self):
         texto_jogador = self.campo_input.get().strip()
@@ -119,10 +123,12 @@ class JanelaJogo(ctk.CTk):
             narrativa = texto_completo
             prompt_visual_ia = "A futuristic clean white testing room with a square glowing screen on the wall"
             
+            # CORREÇÃO: Extração segura dos elementos da lista após o split
             if "PROMPT_VISUAL:" in texto_completo:
                 partes = texto_completo.split("PROMPT_VISUAL:")
-                narrativa = partes[0].strip()
-                prompt_visual_ia = partes[1].strip()
+                if len(partes) >= 2:
+                    narrativa = partes[0].strip()
+                    prompt_visual_ia = partes[1].strip()
 
             # Mostrar a história na consola de texto
             self.caixa_texto.configure(state="normal")
@@ -130,31 +136,24 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # 2. PROCESSO DE MODIFICAÇÃO DE IMAGEM
-            img_bytes_io = io.BytesIO()
-            self.imagem_atual_pil.save(img_bytes_io, format="PNG")
-            bytes_para_api = img_bytes_io.getvalue()
-
-            # Gerar nova imagem combinando o prompt
-            resultado_imagem = client.models.generate_images(
-                model="imagen-3.0-generate-002",
-                prompt=f"{prompt_visual_ia}, maintaining the exact same room structure, style and the glowing square screen from the source image",
-                config={
-                    "number_of_images": 1,
-                    "aspect_ratio": "1:1"
-                }
-                # Se a API Imagen falhar com a imagem base nos testes, podes comentar a linha abaixo
-                # e usar puramente geração por texto (Text-to-Image)
-                # image=bytes_para_api 
-            )
+            # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
+            prompt_final = f"{prompt_visual_ia}, maintaining the exact same room structure, style and the glowing square screen from a front view perspective, sci-fi style, ultra detailed"
+            prompt_codificado = urllib.parse.quote(prompt_final)
+            
+            url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=512&nologo=true"
+            #               f"https://pollinations.ai{prompt_codificado}?width=512&height=512&nologo=true"
+            
+            # Descarregar a imagem gerada
+            resposta_imagem = requests.get(url_ia_gratis, timeout=20)
+            resposta_imagem.raise_for_status()
             
             # 3. ATUALIZAR A INTERFACE
-            # CORREÇÃO: Aceder ao primeiro índice [0] da lista retornada
-            bytes_imagem_nova = resultado_imagem.generated_images.image.image_bytes
-            self.imagem_atual_pil = Image.open(io.BytesIO(bytes_imagem_nova))
+            self.imagem_atual_pil = Image.open(io.BytesIO(resposta_imagem.content))
             
+            # CORREÇÃO EXTRA: text="" limpa qualquer string anterior para evitar o bug de label do CTk
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text="")
+            self.label_imagem.image = img_ctk
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
@@ -163,6 +162,7 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
 
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
+
 
 if __name__ == "__main__":
     app = JanelaJogo()
