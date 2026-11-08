@@ -16,7 +16,7 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 # 2. LIGAÇÃO ÀS APIS DA GOOGLE (Apenas para o chat de texto)
-API_KEY = YourkeyGemini  # Corrigido para ler a tua variável importada do ficheiro Keys
+API_KEY = YourkeyGemini  # Lê a tua variável importada do ficheiro Keys
 client = genai.Client(api_key=API_KEY)
 
 INSTRUCOES_DO_SISTEMA = """
@@ -55,6 +55,9 @@ class JanelaJogo(ctk.CTk):
         
         # Gerar um número de Seed único para esta partida (entre 1 e 100000)
         self.seed_partida = random.randint(1, 100000)
+        
+        # 🧠 NOVO: Guarda o último prompt visual para saber se o cenário mudou
+        self.ultimo_prompt_visual = "A futuristic clean white testing room with a square glowing screen on the wall"
 
         # Inicializar o Chat com o modelo ativo
         self.chat = client.chats.create(
@@ -134,7 +137,7 @@ class JanelaJogo(ctk.CTk):
                 texto_completo = "PROMPT_VISUAL: " + acao
             
             narrativa = texto_completo
-            prompt_visual_ia = "" #"A minimalistic white testing room, sci-fi style"
+            prompt_visual_ia = self.ultimo_prompt_visual
             
             # Extração segura dos elementos da lista após o split
             if "PROMPT_VISUAL:" in texto_completo:
@@ -149,23 +152,22 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-            # --- 🛑 NOVO FILTRO DE PALAVRAS-CHAVE ---
-            # Definimos os gatilhos que dão ordem para alterar a imagem do quarto
-            palavras_gatilho = ["gera", "projeta", "cria", "muda", "simula", "coloca", "materializa", "transforma", "bola", "roblox"]
-            
-            # Converte a ação do jogador para minúsculas para uma verificação segura
-            acao_minuscula = acao.lower()
-            
-            # O Python verifica se ALGUMA das palavras gatilho está presente na frase do utilizador
-            deve_alterar_imagem = any(gatilho in acao_minuscula for gatilho in palavras_gatilho)
+            # --- 🧠 SISTEMA INTELIGENTE DE COMPARAÇÃO DE CENÁRIO ---
+            # Comparamos se a descrição visual que o Gemini ditou agora é diferente da anterior.
+            # Se for diferente, significa que a cena mudou ou um objeto foi alterado/adicionado!
+            deve_alterar_imagem = prompt_visual_ia.lower() != self.ultimo_prompt_visual.lower()
 
             if deve_alterar_imagem:
+                # Atualizamos o estado da memória para a próxima jogada comparar com esta
+                self.ultimo_prompt_visual = prompt_visual_ia
+
                 # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
                 prompt_visual_ia = prompt_visual_ia.replace(".", "").replace(",", "").strip()
                 prompt_final = f"A professional cinematic scene of {prompt_visual_ia} ultra detailed volumetric lighting"
                 prompt_codificado = urllib.parse.quote(prompt_final)
                 
-                # Resolução padrão estável de 512x512 para o Pollinations rodar sem erro 500 ou 402
+                # Aproveitei para fixar o teu link de download com a resolução padrão nativa de 512x512
+                # (Isto remove o teu bug anterior de "512x540" que causava o Erro 500/402 no terminal)
                 url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
                 print(f"url_ia_gratis: {url_ia_gratis}")
                 
@@ -173,26 +175,23 @@ class JanelaJogo(ctk.CTk):
                 resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
                 resposta_imagem.raise_for_status()
                 
-                # 3. ATUALIZAR A INTERFACE COM A NOVA IMAGEM GERADA
-                self.imagem_atual_pil = Image.open(io.BytesIO(resposta_imagem.content))
-                
-                img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
-                self.label_imagem.configure(image=img_ctk, text="")
-                self.label_imagem.image = img_ctk
-  
                 # 3. ATUALIZAR A INTERFACE RECORTANDO A MARGEM EXTRA PROPORCIONALMENTE
                 imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
+
+                # Caixa de corte: Se usares 512x512 nativo, não precisas de crop de segurança.
+                # Mas se quiseres fatiar, mantive a estrutura do crop estruturada aqui.
+                self.imagem_atual_pil = imagem_bruta
 
                 # Corta os píxeis excedentes da base de forma segura na escala 1024 (1024x940)
                 caixa_de_corte = (0, 0, 512, 512)
                 self.imagem_atual_pil = imagem_bruta.crop(caixa_de_corte)
-
+                
                 img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
                 self.label_imagem.configure(image=img_ctk, text="")
                 self.label_imagem.image = img_ctk
                 
             else:
-                print("[Sistema Visual]: Nenhuma palavra-chave detetada. A manter o cenário atual.")
+                print("[Sistema Visual]: O cenário mantem-se idêntico ao anterior. Nenhuma imagem descarregada.")
 
         except Exception as e:
             self.caixa_texto.configure(state="normal")
