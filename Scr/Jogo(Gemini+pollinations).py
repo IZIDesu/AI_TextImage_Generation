@@ -48,7 +48,7 @@ class JanelaJogo(ctk.CTk):
 
         self.title("Laboratório de IA Generativa: O Quarto Seguro")
         self.geometry("900x650")
-        self.resizable(False, False)
+        self.resizable(True, True)
 
         # Inicializar a variável que vai guardar o estado da imagem em memória
         self.imagem_atual_pil = None
@@ -57,7 +57,7 @@ class JanelaJogo(ctk.CTk):
         self.seed_partida = random.randint(1, 100000)
         
         # 🧠 NOVO: Guarda o último prompt visual para saber se o cenário mudou
-        self.ultimo_prompt_visual = "A futuristic clean white testing room with a square glowing screen on the wall"
+        self.ultimo_prompt_visual = "" #"A futuristic clean white testing room with a square glowing screen on the wall"
 
         # Inicializar o Chat com o modelo ativo
         self.chat = client.chats.create(
@@ -134,6 +134,9 @@ class JanelaJogo(ctk.CTk):
                 texto_completo = resposta_ia.text
             except Exception as e:
                 print(f"[Erro de Texto Gemini - Ativar Fallback]: {e}\n")
+                if "RESOURCE_EXHAUSTED" in str(e):
+                    self.caixa_texto.insert(ctk.END, f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!\n\n")
+                    print(f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!")
                 texto_completo = "PROMPT_VISUAL: " + acao
             
             narrativa = texto_completo
@@ -178,8 +181,31 @@ class JanelaJogo(ctk.CTk):
                 print(f"url_ia_gratis: {url_ia_gratis}")
                 
                 cabecalhos = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-                resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
-                resposta_imagem.raise_for_status()
+
+                # --- 🛑 SISTEMA DE RETRY (TENTATIVAS AUTOMÁTICAS) ---
+                tentativas_maximas = 3
+                resposta_imagem = None
+
+                for tentativa in range(1, tentativas_maximas + 1):
+                    try:
+                        print(f"[Sistema Visual]: A tentar descarregar imagem... (Tentativa {tentativa}/{tentativas_maximas})")
+                        resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=15)
+                        resposta_imagem.raise_for_status()
+                        
+                        # Se chegou aqui sem dar erro, interrompe o ciclo de tentativas com sucesso!
+                        print("[Sistema Visual]: Imagem descarregada com sucesso!")
+                        break
+                        
+                    except Exception as erro_rede:
+                        print(f"[Aviso de Rede]: Tentativa {tentativa} falhou devido a: {erro_rede}")
+                        if tentativa < tentativas_maximas:
+                            # Espera 2 segundos antes de tentar a próxima para não sobrecarregar o servidor
+                            import time
+                            time.sleep(2)
+                        else:
+                            # Se esgotou todas as tentativas, dispara o erro definitivo para o bloco principal tratar
+                            raise Exception("O servidor do Pollinations está indisponível após várias tentativas.")
+
                 
                 # 3. ATUALIZAR A INTERFACE
                 imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
@@ -199,6 +225,12 @@ class JanelaJogo(ctk.CTk):
         except Exception as e:
             self.caixa_texto.configure(state="normal")
             print(f"[Erro Visual IA]: {e}\n")
+            if "Pollinations" in str(e):
+                self.caixa_texto.insert(ctk.END, f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento não estou capaz de realizar o pedido!\n\n")
+                print(f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento não estou capaz de realizar o pedido!")
+            elif "RESOURCE_EXHAUSTED" in str(e):
+                self.caixa_texto.insert(ctk.END, f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!\n\n")
+                print(f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!")
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
