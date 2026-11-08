@@ -6,6 +6,7 @@ import requests
 import io
 import threading
 import random  # Necessário para criar um Seed estável no início do jogo
+from tkinter import filedialog  # Necessário para abrir a janela de salvar ficheiro
 from Keys import *
 
 # AI Text Model - Identificador oficial ativo no teu AI Studio
@@ -41,14 +42,15 @@ CONTEXTO_INICIAL = (
 )
 
 URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
+URL_IMAGEM_FINAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/blob/main/Assets/FrontViewOfTheRoomWithTheSquaredLight.jpg"
 
 class JanelaJogo(ctk.CTk):
     def __init__(self):
         super().__init__()
 
         self.title("Laboratório de IA Generativa: O Quarto Seguro")
-        self.geometry("900x650")
-        self.resizable(True, True)
+        self.geometry("950x650")
+        self.resizable(False, False)
 
         # Inicializar a variável que vai guardar o estado da imagem em memória
         self.imagem_atual_pil = None
@@ -71,7 +73,7 @@ class JanelaJogo(ctk.CTk):
 
         # --- PAREDE VISUAL ---
         self.frame_imagem = ctk.CTkFrame(self, width=420, height=450)
-        self.frame_imagem.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        self.frame_imagem.grid(row=0, column=0, padx=20, pady=20) #, sticky="nsew"
         
         self.label_imagem = ctk.CTkLabel(self.frame_imagem, text="A carregar ecrãs holográficos...")
         self.label_imagem.pack(expand=True, fill="both", padx=10, pady=10)
@@ -79,11 +81,16 @@ class JanelaJogo(ctk.CTk):
         # Carregar imagem inicial de segurança do teu GitHub (Sem intervenção de prompts)
         self.atualizar_imagem_da_url(URL_IMAGEM_INICIAL)
 
+        # --- BOTÃO PARA SALVAR IMAGEM ---
+        self.botao_salvar = ctk.CTkButton(self, width=5, height=1, text="💾", command=self.salvar_imagem_no_disco, hover_color="#3e3e4f") #, fg_color="#2b2b36", hover_color="#3e3e4f"
+        self.botao_salvar.grid(row=0, column=0, pady=20, sticky="se")
+
         # --- CONSOLE DE NARRATIVA ---
-        self.caixa_texto = ctk.CTkTextbox(self, width=420, height=450, font=("Courier New", 13))
+        self.caixa_texto = ctk.CTkTextbox(self, width=550, height=450, font=("Courier New", 13))
         self.caixa_texto.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
         self.caixa_texto.insert("0.0", CONTEXTO_INICIAL + "\n\n")
         self.caixa_texto.configure(state="disabled")
+
 
         # --- ZONA DE INPUT DO JOGADOR ---
         self.campo_input = ctk.CTkEntry(self, width=680, placeholder_text="Digita a tua ação...")
@@ -94,7 +101,7 @@ class JanelaJogo(ctk.CTk):
         self.botao_enviar.grid(row=1, column=0, columnspan=2, padx=(0, 20), pady=20, sticky="e")
     
     def atualizar_imagem_da_url(self, url):
-        """Descarrega a imagem da internet e guarda-a no estado do objeto."""
+        #"""Descarrega a imagem da internet e guarda-a no estado do objeto."""
         try:
             resposta = requests.get(url, timeout=10)
             resposta.raise_for_status()
@@ -109,6 +116,25 @@ class JanelaJogo(ctk.CTk):
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text=f"Modo de segurança ativo: {e}")
             self.label_imagem.image = img_ctk
+    
+    def salvar_imagem_no_disco(self):
+        #"""Abre uma janela nativa do sistema operacional para salvar a imagem atual."""
+        if self.imagem_atual_pil is None:
+            return
+        
+        # Abre a caixa de diálogo para escolher a pasta e o nome do arquivo
+        caminho_ficheiro = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("Imagem PNG", "*.png"), ("Imagem JPEG", "*.jpg"), ("Todos os Ficheiros", "*.*")],
+            title="Salvar Imagem Holográfica"
+        )
+        
+        if caminho_ficheiro:
+            try:
+                self.imagem_atual_pil.save(caminho_ficheiro)
+                print(f"[Sistema]: Imagem salva com sucesso em: {caminho_ficheiro}")
+            except Exception as e:
+                print(f"[Erro ao Salvar]: {e}")
 
     def disparar_processamento(self):
         texto_jogador = self.campo_input.get().strip()
@@ -125,6 +151,20 @@ class JanelaJogo(ctk.CTk):
         self.botao_enviar.configure(state="disabled", text="A gerar...")
         
         threading.Thread(target=self.processar_jogada, args=(texto_jogador,), daemon=True).start()
+
+    def exibir_texto_efeito_maquina(self, texto_completo, indice=0):
+        #"""Adiciona o texto caractere por caractere para criar o efeito de máquina de escrever."""
+        if indice < len(texto_completo):
+            self.caixa_texto.configure(state="normal")
+            self.caixa_texto.insert(ctk.END, texto_completo[indice])
+            self.caixa_texto.see(ctk.END)
+            self.caixa_texto.configure(state="disabled")
+            
+            # Agenda a inserção do próximo caractere (30 milissegundos de intervalo)
+            self.after(30, lambda: self.exibir_texto_efeito_maquina(texto_completo, indice + 1))
+        else:
+            # Reativa o botão de envio apenas quando a máquina de escrever terminar de digitar tudo
+            self.botao_enviar.configure(state="normal", text="Enviar Ação")
 
     def processar_jogada(self, acao):
         try:
@@ -150,10 +190,16 @@ class JanelaJogo(ctk.CTk):
                     prompt_visual_ia = partes[1].strip()
 
             # Mostrar a história na consola de texto
-            self.caixa_texto.configure(state="normal")
-            self.caixa_texto.insert(ctk.END, f"[IA]: {narrativa}\n\n")
-            self.caixa_texto.see(ctk.END)
-            self.caixa_texto.configure(state="disabled")
+            #self.caixa_texto.configure(state="normal")
+            #self.caixa_texto.insert(ctk.END, f"[IA]: {narrativa}\n\n")
+            #self.caixa_texto.see(ctk.END)
+            #self.caixa_texto.configure(state="disabled")
+
+            # Em vez de inserir o texto diretamente de forma instantânea,
+            # preparamos a string com o cabeçalho "[IA]: " e chamamos a função animada na thread principal
+            texto_formatado_ia = f"[IA]: {narrativa}\n\n"
+            self.after(0, lambda: self.exibir_texto_efeito_maquina(texto_formatado_ia))
+
 
             # --- 🧠 FILTRO HÍBRIDO (Gatilhos + Comparação de Cenário) ---
             # 1. Palavras que indicam que o utilizador quer uma alteração visual
@@ -237,6 +283,6 @@ class JanelaJogo(ctk.CTk):
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
 
 
-if __name__ == "__main__":
-    app = JanelaJogo()
-    app.mainloop()
+if __name__ == "__main__": #This is a standard Python safeguard. It checks whether the script is being run directly or being imported into another script.
+    app = JanelaJogo() #creates the main window of the application
+    app.mainloop() #keeps the window open and responsive
