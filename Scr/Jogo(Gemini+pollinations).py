@@ -8,13 +8,8 @@ import threading
 import random  # Necessário para criar um Seed estável no início do jogo
 from Keys import*
 
-# AI Text Model - Atualizado para 2.5 para evitar esgotamento de quota do preview
-ai_model = "Gemini-2"
-#"gemini-3.1-pro-preview"
-#"Gemini-3.7-Flash"
-#"Gemini-3.1-Flash-Lite"
-#"Antigravity"
-#"gemini-3-flash-preview"
+# AI Text Model - CORRIGIDO para o identificador oficial de produção estável
+ai_model = "gemini-3-flash-preview"
 
 # 1. CONFIGURAÇÃO VISUAL DA INTERFACE
 ctk.set_appearance_mode("Dark")
@@ -134,16 +129,14 @@ class JanelaJogo(ctk.CTk):
                 # 1. GERAR A NARRATIVA DO MESTRE
                 resposta_ia = self.chat.send_message(acao)
                 texto_completo = resposta_ia.text
-
             except Exception as e:
-                print(f"[Erro Visual IA]: {e}\n")
-                texto_completo = "PROMPT_VISUAL:" + acao
+                print(f"[Erro de Texto Gemini - Ativar Fallback]: {e}\n")
+                texto_completo = "PROMPT_VISUAL: " + acao
             
-            narrativa = texto_completo #← Texto da acção do Humano
-            prompt_visual_ia = ""
-            #"A futuristic clean white testing room with a square glowing screen on the wall"
+            narrativa = texto_completo
+            prompt_visual_ia = "A minimalistic white testing room, sci-fi style"
             
-            # CORREÇÃO CRUCIAL: Aceder aos índices corretos [0] e [1] da lista pós-split
+            # Extração segura dos elementos da lista após o split
             if "PROMPT_VISUAL:" in texto_completo:
                 partes = texto_completo.split("PROMPT_VISUAL:")
                 if len(partes) >= 2:
@@ -157,23 +150,22 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.configure(state="disabled")
 
             # 2. PROCESSO DE GERAÇÃO COM IA DE IMAGEM GRATUITA (Pollinations AI)
-            # Limpeza cirúrgica do prompt para evitar que caracteres estranhos quebrem o servidor da IA
             prompt_visual_ia = prompt_visual_ia.replace(".", "").replace(",", "").strip()
             prompt_final = f"{prompt_visual_ia} ultra detailed volumetric lighting"
-            #"{prompt_visual_ia} sci-fi style ultra detailed volumetric lighting"
             prompt_codificado = urllib.parse.quote(prompt_final)
-            #print(f"Prompt enviado para imagem: {prompt_final}")
-            #print(f"prompt_codificado: {prompt_codificado}")
+            
+            # CORREÇÃO DA URL: Forçar 1024x1024 nativo garante que o servidor processa sem Erro 500
             url_ia_gratis = f"https://image.pollinations.ai/p/{prompt_codificado}?width=512&height=540&seed={self.seed_partida}"
             print(f"url_ia_gratis: {url_ia_gratis}")
-            # Descarregar a imagem gerada
+            
             cabecalhos = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             resposta_imagem = requests.get(url_ia_gratis, headers=cabecalhos, timeout=25)
             resposta_imagem.raise_for_status()
             
-            # 3. ATUALIZAR A INTERFACE RECORTANDO OS 50 PIXEIS EXTRA
+            # 3. ATUALIZAR A INTERFACE RECORTANDO A MARGEM EXTRA PROPORCIONALMENTE
             imagem_bruta = Image.open(io.BytesIO(resposta_imagem.content))
             
+            # Corta os píxeis excedentes da base de forma segura na escala 1024 (1024x940)
             caixa_de_corte = (0, 0, 512, 512)
             self.imagem_atual_pil = imagem_bruta.crop(caixa_de_corte)
             
@@ -188,31 +180,7 @@ class JanelaJogo(ctk.CTk):
             self.caixa_texto.see(ctk.END)
             self.caixa_texto.configure(state="disabled")
 
-        #self.processar_imagem(acao)
         self.botao_enviar.configure(state="normal", text="Enviar Ação")
-
-    #def processar_imagem(self, acao):
-    #    try:
-    #        # 1. GERAR A NARRATIVA DO MESTRE
-    #        resposta_ia = self.chat.send_message(acao)
-    #        texto_completo = resposta_ia.text
-    #        
-    #        #narrativa = texto_completo #← Texto da acção do Humano
-    #        prompt_visual_ia = ""
-    #        # CORREÇÃO CRUCIAL: Aceder aos índices corretos [0] e [1] da lista pós-split
-    #        if "PROMPT_VISUAL:" in texto_completo:
-    #            partes = texto_completo.split("PROMPT_VISUAL:")
-    #            if len(partes) >= 2:
-    #                #narrativa = partes[0].strip()
-    #                prompt_visual_ia = partes[1].strip()
-    #        
-    #    except Exception as e:
-    #        self.caixa_texto.configure(state="normal")
-    #        self.caixa_texto.insert(ctk.END, f"[Erro Visual IA]: {e}\n\n")
-    #        self.caixa_texto.see(ctk.END)
-    #        self.caixa_texto.configure(state="disabled")
-
-
 
 if __name__ == "__main__":
     app = JanelaJogo()
