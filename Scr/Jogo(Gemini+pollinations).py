@@ -204,7 +204,7 @@ class JanelaJogo(ctk.CTk):
 
             # --- 🧠 FILTRO HÍBRIDO (Gatilhos + Comparação de Cenário) ---
             # 1. Palavras que indicam que o utilizador quer uma alteração visual
-            palavras_gatilho = ["gera", "projeta", "cria", "muda", "simula", "coloca", "materializa", "transforma", "bola", "roblox", "quadrado", "cubo", "floresta", "cidade"]
+            palavras_gatilho = ["gera", "projeta", "cria", "muda", "simula", "coloca", "materializa", "transforma", "bola", "roblox", "quadrado", "cubo", "floresta", "cidade","ir","vamos","bora","olhar","espreitar","jogar", "quero estár", "quero ver", "quero olhar", "quero espreitar", "quero estar", "quero jogar", "quero explorar", "quero entrar", "quero sair", "quero ir", "mudar"]
             acao_minuscula = acao.lower()
             contem_gatilho = any(gatilho in acao_minuscula for gatilho in palavras_gatilho)
             
