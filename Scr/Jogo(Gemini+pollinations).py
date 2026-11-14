@@ -41,8 +41,8 @@ CONTEXTO_INICIAL = (
     "AI: Gostarias de saber onde estás?\n"
 )
 
-URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/main/Assets/FrontViewOfTheRoom.jpg" 
-URL_IMAGEM_FINAL = "https://raw.githubusercontent.com/IZIDesu/AI_TextImage_Generation/blob/main/Assets/FrontViewOfTheRoomWithTheSquaredLight.jpg"
+URL_IMAGEM_INICIAL = "https://raw.githubusercontent.com/IZIDesu/O-Quarto-Seguro/main/Assets/FrontViewOfTheRoom.jpg" 
+URL_IMAGEM_FINAL = "https://raw.githubusercontent.com/IZIDesu/O-Quarto-Seguro/blob/main/Assets/FrontViewOfTheRoomWithTheSquaredLight.jpg"
 
 class JanelaJogo(ctk.CTk):
     def __init__(self):
