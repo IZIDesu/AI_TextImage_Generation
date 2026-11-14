@@ -176,9 +176,12 @@ class JanelaJogo(ctk.CTk):
             except Exception as e:
                 print(f"[Erro de Texto Gemini - Ativar Fallback]: {e}\n")
                 if "RESOURCE_EXHAUSTED" in str(e):
-                    self.caixa_texto.insert(ctk.END, f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!\n\n")
+                    self.caixa_texto.configure(state="normal")
+                    self.caixa_texto.insert(ctk.END, "[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!\n\n")
                     print(f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!")
+                    self.caixa_texto.configure(state="disabled")
                 texto_completo = "PROMPT_VISUAL: " + acao
+
             
             narrativa = texto_completo
             prompt_visual_ia = self.ultimo_prompt_visual
