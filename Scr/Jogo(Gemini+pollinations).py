@@ -115,6 +115,7 @@ class JanelaJogo(ctk.CTk):
             self.label_imagem.image = img_ctk
             
         except Exception as e:
+            self.Error = True   
             self.imagem_atual_pil = Image.new("RGB", (400, 430), color="#1e1e24")
             img_ctk = ctk.CTkImage(light_image=self.imagem_atual_pil, dark_image=self.imagem_atual_pil, size=(400, 430))
             self.label_imagem.configure(image=img_ctk, text=f"Modo de segurança ativo: {e}")
@@ -182,6 +183,7 @@ class JanelaJogo(ctk.CTk):
                     self.caixa_texto.insert(ctk.END, "[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!\n\n")
                     print(f"[IA]: Anormalia encontrada no meu sistema!\nNeste momento estás sem créditos, porfavor volte mais tarde!")
                     self.caixa_texto.configure(state="disabled")
+                    self.Error = True
                 texto_completo = "PROMPT_VISUAL: " + acao
 
             
