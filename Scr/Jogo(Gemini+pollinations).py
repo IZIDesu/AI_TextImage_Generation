@@ -100,6 +100,8 @@ class JanelaJogo(ctk.CTk):
 
         self.botao_enviar = ctk.CTkButton(self, text="Enviar Ação", width=120, command=self.disparar_processamento)
         self.botao_enviar.grid(row=1, column=0, columnspan=2, padx=(0, 20), pady=20, sticky="e")
+        
+        self.Error = False  # Variável para controlar se ocorreu um erro
     
     def atualizar_imagem_da_url(self, url):
         #"""Descarrega a imagem da internet e guarda-a no estado do objeto."""
@@ -202,8 +204,9 @@ class JanelaJogo(ctk.CTk):
             # Em vez de inserir o texto diretamente de forma instantânea,
             # preparamos a string com o cabeçalho "[IA]: " e chamamos a função animada na thread principal
             texto_formatado_ia = f"[IA]: {narrativa}\n\n"
-            self.after(0, lambda: self.exibir_texto_efeito_maquina(texto_formatado_ia))
-
+            if not self.Error:
+                self.after(0, lambda: self.exibir_texto_efeito_maquina(texto_formatado_ia))
+            
 
             # --- 🧠 FILTRO HÍBRIDO (Gatilhos + Comparação de Cenário) ---
             # 1. Palavras que indicam que o utilizador quer uma alteração visual
